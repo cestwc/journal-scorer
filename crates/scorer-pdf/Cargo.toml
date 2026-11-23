@@ -1,0 +1,12 @@
+[package]
+name = "scorer-pdf"
+description = "PDF text/image extraction with positions, annotation and score-sheet output (MuPDF)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+scorer-core.workspace = true
+mupdf = { version = "0.8", default-features = false, features = ["base14-fonts", "img"] }
+thiserror.workspace = true
+tracing.workspace = true

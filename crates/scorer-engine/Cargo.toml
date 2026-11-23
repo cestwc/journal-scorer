@@ -1,0 +1,16 @@
+[package]
+name = "scorer-engine"
+description = "Scoring pipeline: segment -> LLM classification -> evidence -> score"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+scorer-core.workspace = true
+scorer-llm.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

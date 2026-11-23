@@ -1,0 +1,205 @@
+# AI Journal Reflection rubric (source: grade.md).
+# Edit or copy this file and pass it with --rubric to change the rubric without recompiling.
+
+id = "ai-journal-reflection"
+name = "AI Journal Reflection"
+version = "1.0"
+criterion_max = 5.0
+
+[weights]
+weak = 0.25
+moderate = 0.60
+strong = 1.00
+
+# ---------------------------------------------------------------------------
+[[criteria]]
+id = "D"
+name = "Development Process & Keeping AI Under Control"
+
+[[criteria.subitems]]
+id = "D1"
+name = "workflow / cycle identification"
+weak = "Vaguely mentions using AI or a process; does not clearly name the cycle; no stage-by-stage description."
+moderate = "Names the cycle (e.g. SDD-BDD-TDD or SDD-only) but only briefly; little or no phase detail."
+strong = "Clearly names the cycle, describes its stages or sequence, and connects it to sprint work or a concrete example."
+
+[[criteria.subitems]]
+id = "D2"
+name = "manual vs AI task separation"
+weak = "Implies some division of labour, but not clearly or specifically."
+moderate = "Lists some tasks done by the human and some by AI; division understandable but incomplete."
+strong = "Clearly distinguishes human-owned from AI-assisted tasks with multiple concrete examples and explains why the division was made."
+
+[[criteria.subitems]]
+id = "D3"
+name = "control rationale / human-in-loop"
+weak = "Says the human checked or reviewed AI output without explaining why."
+moderate = "Explains that human review reduces risk, but does not fully articulate trade-offs or checkpoints."
+strong = "Explains why human control is retained, names checkpoints, says what could go wrong without them, and discusses trade-offs consciously accepted."
+
+[[criteria.subitems]]
+id = "D4"
+name = "code understanding"
+weak = "Mentions looking at or using code without explaining it."
+moderate = "Describes the code's function at a high level."
+strong = "Explains in detail what the code does and why it is structured that way, connecting implementation choices to architecture or behaviour."
+
+[[criteria.subitems]]
+id = "D5"
+name = "issue / inefficiency / subtle mistake detection"
+weak = "Says there was a problem, but no specifics."
+moderate = "Identifies a concrete issue, but the analysis is shallow."
+strong = "Identifies a specific bug, inefficiency or subtle mistake, explains why it is a problem and its impact if left unfixed."
+
+# ---------------------------------------------------------------------------
+[[criteria]]
+id = "E"
+name = "Critical Engagement with AI Output"
+
+[[criteria.subitems]]
+id = "E1"
+name = "verification behavior"
+weak = "Says AI output was checked, but not how."
+moderate = "Describes a simple verification step, e.g. looked at tests, a diff or a result."
+strong = "Shows systematic verification (diff review, bundle inspection, live endpoint checks, manual reproduction) linked to a specific risk."
+
+[[criteria.subitems]]
+id = "E2"
+name = "unexpected behavior detection"
+weak = "Vaguely says AI behaved unexpectedly."
+moderate = "Identifies a concrete abnormal result, but does not clearly show how it was found."
+strong = "Clearly describes the unexpected behaviour and how it was detected; the failure mode is specific and reproducible."
+
+[[criteria.subitems]]
+id = "E3"
+name = "root-cause analysis"
+weak = "Describes what happened but not why."
+moderate = "Gives a surface-level explanation."
+strong = "Identifies the root cause, explains the causal chain, and shows understanding of system-level or process-level causes."
+
+[[criteria.subitems]]
+id = "E4"
+name = "process improvement"
+weak = "Says 'next time I will be more careful'."
+moderate = "Proposes a specific improvement, but it is incomplete or not clearly justified."
+strong = "Proposes an actionable process change, explains why it reduces recurrence, ideally tied to the discovered root cause."
+
+# ---------------------------------------------------------------------------
+[[criteria]]
+id = "C"
+name = "Collaboration: Pair Programming or Team-AI Integration"
+
+[[criteria.subitems]]
+id = "C1"
+name = "roles"
+weak = "Says people worked together without role detail."
+moderate = "Gives a rough division of labour."
+strong = "Clearly describes roles and explains how roles affected the work."
+
+[[criteria.subitems]]
+id = "C2"
+name = "turn-taking"
+weak = "Says they alternated, without detail."
+moderate = "Mentions some alternation in the work."
+strong = "Explains who did what first, how and why they switched; turn-taking is meaningful, not incidental."
+
+[[criteria.subitems]]
+id = "C3"
+name = "coordination"
+weak = "Says they coordinated, without mechanism."
+moderate = "Mentions shared diagrams, API lists, branches or boundaries."
+strong = "Explains how coordination worked in practice, e.g. aligning schemas, interfaces, dependency boundaries, shared checkpoints."
+
+[[criteria.subitems]]
+id = "C4"
+name = "disagreement resolution"
+weak = "Says there was a disagreement."
+moderate = "Says they compared options."
+strong = "Explains how the disagreement was resolved, gives the decision criterion and how the final choice was justified."
+
+[[criteria.subitems]]
+id = "C5"
+name = "human-human vs human-AI comparison / accountability insight"
+weak = "Says human or AI is better in a vague way."
+moderate = "Compares one or two aspects."
+strong = "Compares collaboration modes in a nuanced way (trust, accountability, automation bias, speed, communication) and gives a generalisable insight."
+
+# ---------------------------------------------------------------------------
+[[criteria]]
+id = "M"
+name = "Metacognition"
+
+[[criteria.subitems]]
+id = "M1"
+name = "assumptions about AI"
+weak = "Only implies an assumption."
+moderate = "States an assumption explicitly."
+strong = "States the assumption and explains how evidence confirmed or challenged it."
+
+[[criteria.subitems]]
+id = "M2"
+name = "surprise / challenge"
+weak = "Says something was surprising."
+moderate = "Says what was surprising and a little of why."
+strong = "Explains why the event was surprising relative to prior expectations."
+
+[[criteria.subitems]]
+id = "M3"
+name = "blind spots / cognitive patterns"
+weak = "General self-reflection."
+moderate = "Identifies a specific bias or habit."
+strong = "Names the blind spot or cognitive pattern clearly and shows how it affected decisions."
+
+[[criteria.subitems]]
+id = "M4"
+name = "mental model evolution"
+weak = "Says 'I learned something'."
+moderate = "Says their view changed."
+strong = "Traces how their mental model changed over time, with a before/after shift backed by evidence."
+
+[[criteria.subitems]]
+id = "M5"
+name = "future workflow change"
+weak = "Says they will do better next time."
+moderate = "Proposes a concrete future adjustment."
+strong = "Proposes an actionable, justified workflow change tied to the lesson learned."
+
+# ---------------------------------------------------------------------------
+[[criteria]]
+id = "S"
+name = "Specificity & Use of Sprint Evidence"
+
+[[criteria.subitems]]
+id = "S1"
+name = "feature naming"
+weak = "Generic mention of work or functionality."
+moderate = "References a specific feature occasionally."
+strong = "Uses feature names accurately and repeatedly, anchoring claims in sprint work."
+
+[[criteria.subitems]]
+id = "S2"
+name = "artifact usage"
+weak = "Mentions artifacts vaguely."
+moderate = "Cites at least one concrete artifact."
+strong = "Uses multiple concrete artifacts and explains how they support the claim."
+
+[[criteria.subitems]]
+id = "S3"
+name = "observable outcome"
+weak = "Says something worked or failed."
+moderate = "Gives a result that can be checked."
+strong = "Gives a specific observable outcome, e.g. test result, coverage number, 404, route behaviour, scenario pass/fail."
+
+[[criteria.subitems]]
+id = "S4"
+name = "precision / line-level detail"
+weak = "Broad or vague description."
+moderate = "Some concrete detail."
+strong = "Precise technical detail, e.g. route names, constraints, file names, counts, figures, line references."
+
+[[criteria.subitems]]
+id = "S5"
+name = "evidence distributed across sections"
+weak = "Evidence appears in only one place."
+moderate = "Evidence appears in multiple places."
+strong = "Evidence is woven throughout the reflection; different sections are independently supported."

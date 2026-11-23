@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Journal Scorer</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Journal Scorer</div>
+    <div id="status" class="status">connecting…</div>
+  </header>
+
+  <main class="layout">
+    <section class="pane doc-pane">
+      <div class="pane-head">
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="edit">Text</button>
+          <button class="tab" data-tab="annotated" id="annotated-tab" disabled>Annotated</button>
+          <button class="tab" data-tab="pdf" id="pdf-tab" hidden>PDF</button>
+        </div>
+        <div class="actions">
+          <label class="btn ghost">Open .pdf / .txt<input type="file" id="file" accept=".pdf,.txt,.md,application/pdf,text/plain" hidden></label>
+          <button id="score" class="btn primary">Score</button>
+        </div>
+      </div>
+
+      <div id="edit-view" class="view">
+        <textarea id="input" spellcheck="false" placeholder="Paste a journal reflection here, or open / drop a PDF…"></textarea>
+        <div id="input-hint" class="hint"></div>
+      </div>
+
+      <div id="pdf-view" class="view" hidden>
+        <iframe id="pdf-frame" title="Annotated PDF"></iframe>
+      </div>
+
+      <div id="annotated-view" class="view" hidden>
+        <div id="legend" class="legend"></div>
+        <div id="doc" class="doc"></div>
+      </div>
+    </section>
+
+    <aside class="pane side-pane">
+      <div id="empty" class="empty">Open or drop a <b>PDF</b>, or paste text and press <b>Score</b>.<br>
+        The model labels each sentence against the rubric; the scores are then computed from those labels.</div>
+      <div id="busy" class="busy" hidden>
+        <div class="spinner"></div>
+        <div><span id="busy-stage">Scoring…</span> <span class="muted"><span id="elapsed">0</span>s</span></div>
+        <div class="muted small">Every sentence (and every screenshot) is sent to the model. A long journal can take 10–20 minutes; you can leave this page open.</div>
+      </div>
+      <div id="error" class="error" hidden></div>
+
+      <div id="results" hidden>
+        <div class="total">
+          <div>
+            <div class="muted small">Total</div>
+            <div class="total-num"><span id="total"></span><span class="muted"> / <span id="max-total"></span></span></div>
+          </div>
+          <div class="downloads">
+            <a id="download-pdf" class="btn primary" hidden>Annotated PDF</a>
+            <button id="download" class="btn ghost">JSON</button>
+          </div>
+        </div>
+        <div id="meta" class="muted small"></div>
+        <div id="detail" class="detail" hidden></div>
+        <div id="criteria" class="criteria"></div>
+        <div id="warnings" class="warnings" hidden></div>
+      </div>
+    </aside>
+  </main>
+
+  <section id="evidence-sec" class="evidence-sec" hidden>
+    <h2>Evidence <span id="ev-count" class="muted"></span></h2>
+    <div class="table-wrap">
+      <table class="ev-table">
+        <thead><tr><th>ID</th><th>Text</th><th>Labels</th></tr></thead>
+        <tbody id="ev-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <script src="/app.js"></script>
+</body>
+</html>

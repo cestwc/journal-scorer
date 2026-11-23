@@ -1,0 +1,33 @@
+# Copy to journal-scorer.toml (git-ignored) and adjust.
+# Any OpenAI-compatible server works; nothing here is provider-specific code.
+
+[llm]
+kind = "openai_compatible"
+# Development: the local server on port 8080 (use an SSH tunnel or the node IP as needed).
+base_url = "http://127.0.0.1:8080/v1"
+model = "qwen3.8-flash-next-iq3_s"
+# Name of the env var holding the key; the key itself never goes in this file.
+api_key_env = "LLM_API_KEY"
+timeout_secs = 300
+json_mode = true
+
+# Server-specific request fields are passed through verbatim, e.g. to turn off
+# Qwen-style thinking on llama.cpp-based servers:
+# [llm.extra_body.chat_template_kwargs]
+# enable_thinking = false
+
+# Offline alternative:
+# [llm]
+# kind = "mock"
+
+[scorer]
+batch_size = 15
+temperature = 0.0
+max_tokens = 16384
+max_retries = 1
+
+[rubric]
+# path = "my_rubric.toml"   # default: built-in AI Journal rubric
+
+[server]
+addr = "127.0.0.1:2379"
