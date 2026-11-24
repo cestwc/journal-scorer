@@ -6,6 +6,7 @@
 pub mod config;
 pub mod error;
 pub mod json;
+pub mod opencode;
 pub mod provider;
 pub mod providers;
 pub mod types;

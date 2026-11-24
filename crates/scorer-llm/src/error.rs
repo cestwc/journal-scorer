@@ -12,6 +12,8 @@ pub enum LlmError {
     Decode(String),
     #[error("provider returned an empty completion")]
     Empty,
+    #[error("the model's reply was cut off at its output limit")]
+    Truncated,
     #[error("model output is not valid JSON ({reason}); output starts with: {snippet}")]
     InvalidJson { reason: String, snippet: String },
 }

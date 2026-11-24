@@ -50,8 +50,8 @@ Set `LIBCLANG_PATH` in `.cargo/config.toml` for your machine.
 ## Usage
 
 ```bash
-cp journal-scorer.example.toml journal-scorer.toml   # edit base_url/model
-export LLM_API_KEY=...                               # if the server needs one
+cp journal-scorer.example.toml journal-scorer.toml   # default: model strata/strata via OpenCode
+cargo run -- models                                  # models available from your OpenCode setup
 
 cargo run --release -- score reflection.txt          # JSON report to stdout
 cat reflection.txt | cargo run -- score -            # stdin
@@ -61,6 +61,7 @@ cargo run -- rubric                                  # print active rubric
 cargo run -- serve                                   # HTTP API on 127.0.0.1:2379
 
 # No config file:
+cargo run -- --opencode --model openrouter/vendor/model score r.txt
 cargo run -- --base-url http://127.0.0.1:8080/v1 --model mymodel score r.txt
 cargo run -- --mock score r.txt                      # offline
 ```
@@ -80,6 +81,18 @@ curl -s -F file=@journal.pdf localhost:2379/api/jobs           # -> {"id": "..."
 curl -s localhost:2379/api/jobs/<id>                            # progress, then report
 curl -s -o out.pdf 'localhost:2379/api/jobs/<id>/annotated.pdf?download=1'
 ```
+
+## Models via OpenCode
+
+With `kind = "opencode"` the scorer uses any model your OpenCode setup can reach, with no new keys:
+provider addresses come from `opencode.json(c)` (with `{env:…}`/`{file:…}`), keys from OpenCode's
+`auth.json`, and image support plus output limits from OpenCode's model catalog cache. OpenCode
+itself is not run. Supported: providers speaking the OpenAI chat API (`@ai-sdk/openai-compatible`,
+OpenRouter, OpenAI). Not yet: Anthropic/Google-protocol models and browser-login (OAuth) providers.
+
+- Text-only models: screenshots are skipped with a warning.
+- Output limits from the catalog cap `max_tokens`; if a reply is still cut off, the batch is split in
+  half and retried (down to single spans).
 
 ## Extending
 

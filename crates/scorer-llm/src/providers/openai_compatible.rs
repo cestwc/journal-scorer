@@ -16,31 +16,51 @@ pub struct OpenAiCompatibleProvider {
     api_key: Option<String>,
     json_mode: bool,
     extra_body: Map<String, Value>,
+    info: Option<ProviderInfo>,
 }
 
 impl OpenAiCompatibleProvider {
     pub fn from_config(cfg: &OpenAiCompatibleConfig) -> Result<Self, LlmError> {
-        if cfg.base_url.trim().is_empty() {
-            return Err(LlmError::Config("base_url is empty".into()));
-        }
         let api_key = match &cfg.api_key_env {
             Some(var) => Some(std::env::var(var).map_err(|_| {
                 LlmError::Config(format!("environment variable `{var}` (api_key_env) is not set"))
             })?),
             None => None,
         };
+        Self::new(&cfg.base_url, &cfg.model, api_key, cfg.timeout_secs, cfg.json_mode, cfg.extra_body.clone())
+    }
+
+    pub fn new(
+        base_url: &str,
+        model: &str,
+        api_key: Option<String>,
+        timeout_secs: u64,
+        json_mode: bool,
+        extra_body: Map<String, Value>,
+    ) -> Result<Self, LlmError> {
+        if base_url.trim().is_empty() {
+            return Err(LlmError::Config("base_url is empty".into()));
+        }
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(cfg.timeout_secs))
+            .timeout(Duration::from_secs(timeout_secs))
             .build()
             .map_err(|e| LlmError::Config(e.to_string()))?;
         Ok(Self {
             client,
-            endpoint: format!("{}/chat/completions", cfg.base_url.trim_end_matches('/')),
-            model: cfg.model.clone(),
-            api_key,
-            json_mode: cfg.json_mode,
-            extra_body: cfg.extra_body.clone(),
+            endpoint: format!("{}/chat/completions", base_url.trim_end_matches('/')),
+            model: model.to_owned(),
+            api_key: api_key.filter(|k| !k.is_empty()),
+            json_mode,
+            extra_body,
+            info: None,
         })
+    }
+
+    /// Reports `info` (e.g. the OpenCode model name and capabilities)
+    /// instead of the plain adapter description.
+    pub fn with_info(mut self, info: ProviderInfo) -> Self {
+        self.info = Some(ProviderInfo { endpoint: Some(self.endpoint.clone()), ..info });
+        self
     }
 }
 
@@ -106,11 +126,10 @@ struct ChoiceMessage {
 #[async_trait]
 impl LlmProvider for OpenAiCompatibleProvider {
     fn info(&self) -> ProviderInfo {
-        ProviderInfo {
-            kind: "openai_compatible".into(),
-            model: self.model.clone(),
+        self.info.clone().unwrap_or_else(|| ProviderInfo {
             endpoint: Some(self.endpoint.clone()),
-        }
+            ..ProviderInfo::new("openai_compatible", self.model.clone())
+        })
     }
 
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
@@ -132,12 +151,19 @@ impl LlmProvider for OpenAiCompatibleProvider {
         let status = resp.status();
         let text = resp.text().await.map_err(|e| LlmError::Transport(e.to_string()))?;
         if !status.is_success() {
+            // Some servers (e.g. Strata) reject JSON cut off at the limit.
+            if text.contains("finish_reason=length") {
+                return Err(LlmError::Truncated);
+            }
             let body: String = text.chars().take(500).collect();
             return Err(LlmError::Status { status: status.as_u16(), body });
         }
 
         let parsed: ChatResponse = serde_json::from_str(&text).map_err(|e| LlmError::Decode(e.to_string()))?;
         let choice = parsed.choices.into_iter().next().ok_or(LlmError::Empty)?;
+        if request.json_output && choice.finish_reason.as_deref() == Some("length") {
+            return Err(LlmError::Truncated);
+        }
         let content = choice.message.content.filter(|c| !c.trim().is_empty()).ok_or(LlmError::Empty)?;
         Ok(CompletionResponse {
             content,

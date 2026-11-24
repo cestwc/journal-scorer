@@ -16,6 +16,33 @@ use crate::{pdf, web};
 
 pub async fn run(cli: Cli) -> Result<()> {
     match cli.command {
+        Command::Models { provider, vision, all, json } => {
+            let setup = scorer_llm::opencode::OpencodeSetup::load(&Default::default())?;
+            let models: Vec<_> = setup
+                .list()
+                .into_iter()
+                .filter(|m| provider.as_deref().map_or(true, |p| m.spec.split('/').next() == Some(p)))
+                .filter(|m| !vision || m.vision == Some(true))
+                .filter(|m| all || m.unusable.is_none())
+                .collect();
+            if json {
+                return print_json(&models, false);
+            }
+            println!("{:<52} {:>6} {:>8} {:>15}  NAME", "MODEL", "IMAGES", "CONTEXT", "$/M IN / OUT");
+            for m in &models {
+                let images = match m.vision { Some(true) => "yes", Some(false) => "no", None => "?" };
+                let context = m.context.map(|c| format!("{}K", c / 1000)).unwrap_or_else(|| "?".into());
+                let cost = m.cost.map(|(i, o)| format!("{i} / {o}")).unwrap_or_else(|| "?".into());
+                println!("{:<52} {:>6} {:>8} {:>15}  {}", m.spec, images, context, cost, m.name);
+                if let Some(why) = &m.unusable {
+                    println!("{:<52} unusable: {why}", "");
+                }
+            }
+            if let Some(default) = setup.default_model() {
+                println!("\nOpenCode default: {default}");
+            }
+            Ok(())
+        }
         Command::Rubric { compact } => {
             let rubric = config::load_rubric(cli.global.rubric.as_deref())?;
             print_json(&rubric, compact)
@@ -81,8 +108,18 @@ pub fn build_scorer(cfg: &AppConfig) -> Result<Scorer> {
     let rubric = config::load_rubric(cfg.rubric.path.as_deref())?;
     let provider = scorer_llm::build_provider(&cfg.llm).context("building LLM provider")?;
     let info = provider.info();
+    let mut options = cfg.scorer.clone();
+    // Stay within the model's real limits.
+    if let Some(max) = info.max_output {
+        options.max_tokens = Some(options.max_tokens.map_or(max, |m| m.min(max)));
+        options.figure_max_tokens = options.figure_max_tokens.min(max);
+    }
+    if info.vision == Some(false) && options.describe_figures {
+        tracing::warn!(model = %info.model, "model does not accept images; screenshots will be skipped");
+        options.describe_figures = false;
+    }
     tracing::info!(provider = %info.kind, model = %info.model, rubric = %rubric.id, "scorer ready");
-    Ok(Scorer::new(provider, Arc::new(rubric)).with_options(cfg.scorer.clone()))
+    Ok(Scorer::new(provider, Arc::new(rubric)).with_options(options))
 }
 
 fn is_pdf(path: &Path) -> bool {

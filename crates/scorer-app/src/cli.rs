@@ -22,7 +22,7 @@ pub struct GlobalArgs {
     /// OpenAI-compatible base URL, e.g. http://127.0.0.1:8080/v1 (overrides config).
     #[arg(long, global = true)]
     pub base_url: Option<String>,
-    /// Model name (overrides config).
+    /// Model (overrides config); with OpenCode, `provider/model` as in `journal-scorer models`.
     #[arg(long, global = true)]
     pub model: Option<String>,
     /// Environment variable that holds the API key (overrides config).
@@ -31,6 +31,9 @@ pub struct GlobalArgs {
     /// Use the offline mock provider (returns no evidence).
     #[arg(long, global = true)]
     pub mock: bool,
+    /// Use a model from your OpenCode setup (pick it with --model provider/model).
+    #[arg(long, global = true)]
+    pub opencode: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -71,6 +74,21 @@ pub enum Command {
         input: String,
         #[arg(long)]
         compact: bool,
+    },
+    /// List the models available from your OpenCode setup.
+    Models {
+        /// Only this provider (e.g. strata, openrouter).
+        #[arg(long)]
+        provider: Option<String>,
+        /// Only models that accept images.
+        #[arg(long)]
+        vision: bool,
+        /// Also list models the scorer cannot use, with the reason.
+        #[arg(long)]
+        all: bool,
+        /// Output JSON instead of a table.
+        #[arg(long)]
+        json: bool,
     },
     /// Print the active rubric as JSON.
     Rubric {

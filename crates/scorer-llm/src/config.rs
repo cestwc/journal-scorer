@@ -4,12 +4,17 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+pub use crate::opencode::OpencodeConfig;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ProviderConfig {
     /// Any server exposing `POST {base_url}/chat/completions` in the OpenAI
     /// format (llama.cpp, vLLM, Strata, OpenRouter, OpenAI, ...).
     OpenaiCompatible(OpenAiCompatibleConfig),
+    /// A model from the local OpenCode setup (addresses and keys are read
+    /// from OpenCode's files; OpenCode itself is not run).
+    Opencode(OpencodeConfig),
     /// Offline provider returning canned responses; for tests and UI work.
     Mock(MockConfig),
 }

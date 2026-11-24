@@ -23,7 +23,7 @@ impl MockProvider {
 #[async_trait]
 impl LlmProvider for MockProvider {
     fn info(&self) -> ProviderInfo {
-        ProviderInfo { kind: "mock".into(), model: "mock".into(), endpoint: None }
+        ProviderInfo::new("mock", "mock")
     }
 
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {

@@ -1,13 +1,18 @@
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use scorer_core::scoring;
 use scorer_core::segment::{Segmenter, SentenceSegmenter};
-use scorer_core::{Document, EvidenceId, Figure, PdfRegion, Rubric, SpanId, SpanKind, TextSpan};
+use scorer_core::{Document, Evidence, EvidenceId, Figure, PdfRegion, Rubric, SpanId, SpanKind, TextSpan};
 use scorer_llm::json::{parse_json, strip_reasoning};
-use scorer_llm::{CompletionRequest, ImageData, LlmProvider, Message, ProviderInfo};
+use scorer_llm::{CompletionRequest, ImageData, LlmError, LlmProvider, Message, ProviderInfo};
 use serde::{Deserialize, Serialize};
 
 use crate::classification::{to_evidence, LlmClassification};
+
+/// Result of classifying a batch: evidence, warnings, LLM calls made.
+type BatchOutcome = (Vec<Evidence>, Vec<String>, u32);
 use crate::progress::{no_progress, Progress, ProgressFn, Stage};
 use crate::{prompt, EngineError, RunStats, ScoreReport};
 
@@ -125,10 +130,11 @@ impl Scorer {
         for (i, batch) in batches.iter().enumerate() {
             progress(Progress::new(Stage::Classifying, i, batches.len()));
             tracing::info!(batch = i + 1, of = batches.len(), spans = batch.len(), "classifying batch");
-            let (classification, calls) = self.classify_batch(&system, batch).await?;
+            let (found, notes, calls) = self.classify_adaptive(&system, batch).await?;
             stats.batches += 1;
             stats.llm_calls += calls;
-            evidence.extend(to_evidence(&self.rubric, batch, classification, &mut warnings));
+            evidence.extend(found);
+            warnings.extend(notes);
         }
         progress(Progress::new(Stage::Classifying, batches.len(), batches.len()));
 
@@ -165,6 +171,34 @@ impl Scorer {
             return Err(EngineError::Llm(scorer_llm::LlmError::Empty));
         }
         Ok(text.chars().take(MAX_FIGURE_DESCRIPTION).collect())
+    }
+
+    /// Classifies a batch; if the reply is cut off at the model's output
+    /// limit, splits the batch in half and classifies each half.
+    fn classify_adaptive<'a>(
+        &'a self,
+        system: &'a str,
+        batch: &'a [TextSpan],
+    ) -> Pin<Box<dyn Future<Output = Result<BatchOutcome, EngineError>> + Send + 'a>> {
+        Box::pin(async move {
+            match self.classify_batch(system, batch).await {
+                Ok((classification, calls)) => {
+                    let mut warnings = Vec::new();
+                    let evidence = to_evidence(&self.rubric, batch, classification, &mut warnings);
+                    Ok((evidence, warnings, calls))
+                }
+                Err(EngineError::Llm(LlmError::Truncated)) if batch.len() > 1 => {
+                    tracing::warn!(spans = batch.len(), "reply cut off at the output limit; splitting the batch");
+                    let (a, b) = batch.split_at(batch.len() / 2);
+                    let (mut ev, mut warn, calls_a) = self.classify_adaptive(system, a).await?;
+                    let (ev_b, warn_b, calls_b) = self.classify_adaptive(system, b).await?;
+                    ev.extend(ev_b);
+                    warn.extend(warn_b);
+                    Ok((ev, warn, calls_a + calls_b + 1))
+                }
+                Err(e) => Err(e),
+            }
+        })
     }
 
     async fn classify_batch(
@@ -278,6 +312,48 @@ mod tests {
         assert!(report.evidence[0].span.text.starts_with("[Image on page 2] Mock description"));
         assert_eq!(report.stats.llm_calls, 2);
         assert_eq!(progress_calls.lock().unwrap()[0], Stage::DescribingImages);
+    }
+
+    /// Truncates any classification request with more than `max` spans.
+    struct LimitedProvider {
+        max: usize,
+        calls: std::sync::atomic::AtomicU32,
+    }
+
+    #[async_trait::async_trait]
+    impl LlmProvider for LimitedProvider {
+        fn info(&self) -> ProviderInfo {
+            ProviderInfo::new("test", "limited")
+        }
+        async fn complete(&self, req: CompletionRequest) -> Result<scorer_llm::CompletionResponse, LlmError> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let user = &req.messages[1].content;
+            let ids: Vec<&str> = user.lines().filter_map(|l| l.strip_prefix('[')?.split(']').next()).collect();
+            if ids.len() > self.max {
+                return Err(LlmError::Truncated);
+            }
+            let ev: Vec<String> = ids
+                .iter()
+                .map(|id| format!(r#"{{"span_id":"{id}","supports":[{{"subitem":"S1","strength":"weak"}}]}}"#))
+                .collect();
+            Ok(scorer_llm::CompletionResponse { content: format!(r#"{{"evidence":[{}]}}"#, ev.join(",")), ..Default::default() })
+        }
+    }
+
+    #[tokio::test]
+    async fn truncated_batches_are_split() {
+        let provider = Arc::new(LimitedProvider { max: 2, calls: Default::default() });
+        let text = "One a. Two b. Three c. Four d. Five e.";
+        let report = Scorer::new(provider.clone(), Arc::new(Rubric::builtin_ai_journal()))
+            .with_options(ScorerOptions { batch_size: 5, ..Default::default() })
+            .score_text(text)
+            .await
+            .unwrap();
+        assert_eq!(report.evidence.len(), 5, "every span still classified");
+        let ids: Vec<&str> = report.evidence.iter().map(|e| e.span.id.as_str()).collect();
+        assert_eq!(ids, ["S1", "S2", "S3", "S4", "S5"], "order preserved");
+        // 5 -> (2, 3) -> 3 -> (1, 2): calls = 1 + 1 + 1 + 1 + 1 = 5
+        assert_eq!(provider.calls.load(std::sync::atomic::Ordering::SeqCst), 5);
     }
 
     #[tokio::test]

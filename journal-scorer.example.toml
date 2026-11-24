@@ -1,20 +1,25 @@
 # Copy to journal-scorer.toml (git-ignored) and adjust.
-# Any OpenAI-compatible server works; nothing here is provider-specific code.
+# The provider is chosen here; nothing in the code is provider-specific.
 
 [llm]
-kind = "openai_compatible"
-# Development: the local server on port 8080 (use an SSH tunnel or the node IP as needed).
-base_url = "http://127.0.0.1:8080/v1"
-model = "qwen3.8-flash-next-iq3_s"
-# Name of the env var holding the key; the key itself never goes in this file.
-api_key_env = "LLM_API_KEY"
+# Use a model from your OpenCode setup: addresses and keys are read from
+# OpenCode's files (~/.config/opencode, ~/.local/share/opencode/auth.json).
+# List choices with `journal-scorer models`.
+kind = "opencode"
+model = "strata/strata"
 timeout_secs = 300
-json_mode = true
 
-# Server-specific request fields are passed through verbatim, e.g. to turn off
-# Qwen-style thinking on llama.cpp-based servers:
-# [llm.extra_body.chat_template_kwargs]
-# enable_thinking = false
+# Alternative: any OpenAI-compatible server, configured directly.
+# [llm]
+# kind = "openai_compatible"
+# base_url = "http://127.0.0.1:8080/v1"
+# model = "qwen3.8-flash-next-iq3_s"
+# api_key_env = "LLM_API_KEY"   # name of the env var holding the key
+# timeout_secs = 300
+# json_mode = true
+# # Server-specific request fields, passed through verbatim:
+# # [llm.extra_body.chat_template_kwargs]
+# # enable_thinking = false
 
 # Offline alternative:
 # [llm]

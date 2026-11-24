@@ -77,6 +77,17 @@ fn resolve_llm(from_file: Option<&ProviderConfig>, args: &GlobalArgs) -> Result<
     if args.mock {
         return Ok(ProviderConfig::Mock(MockConfig::default()));
     }
+    let file_opencode = match from_file {
+        Some(ProviderConfig::Opencode(c)) if args.base_url.is_none() => Some(c.clone()),
+        _ => None,
+    };
+    if args.opencode || file_opencode.is_some() {
+        let mut c = file_opencode.unwrap_or_default();
+        if let Some(m) = &args.model {
+            c.model = Some(m.clone());
+        }
+        return Ok(ProviderConfig::Opencode(c));
+    }
     let mut base = match from_file {
         Some(ProviderConfig::OpenaiCompatible(c)) => Some(c.clone()),
         Some(other) if args.base_url.is_none() && args.model.is_none() => return Ok(other.clone()),
@@ -86,7 +97,7 @@ fn resolve_llm(from_file: Option<&ProviderConfig>, args: &GlobalArgs) -> Result<
         let (Some(base_url), Some(model)) = (&args.base_url, &args.model) else {
             bail!(
                 "no LLM provider configured: create {DEFAULT_CONFIG_FILE} (see journal-scorer.example.toml), \
-                 pass --base-url and --model, or use --mock"
+                 use --opencode [--model provider/model], pass --base-url and --model, or use --mock"
             );
         };
         base = Some(OpenAiCompatibleConfig {
