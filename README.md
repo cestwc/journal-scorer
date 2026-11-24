@@ -90,6 +90,10 @@ provider addresses come from `opencode.json(c)` (with `{env:…}`/`{file:…}`),
 itself is not run. Supported: providers speaking the OpenAI chat API (`@ai-sdk/openai-compatible`,
 OpenRouter, OpenAI). Not yet: Anthropic/Google-protocol models and browser-login (OAuth) providers.
 
+- Choosing a model: the web page has a Model menu (default, recently used, then every usable model
+  by provider; text-only models are marked). The API takes `"model": "provider/model"` in
+  `/api/score` and a `model` field in the `/api/jobs` upload; `GET /api/models` lists them. Each
+  model is set up on first use and reused. Without `kind = "opencode"` the server has one fixed model.
 - Text-only models: screenshots are skipped with a warning.
 - Output limits from the catalog cap `max_tokens`; if a reply is still cut off, the batch is split in
   half and retried (down to single spans).

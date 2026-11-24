@@ -11,6 +11,14 @@ pub enum Stage {
     Annotating,
     Done,
     Failed,
+    Cancelled,
+}
+
+impl Stage {
+    /// No further progress will be reported.
+    pub fn is_finished(self) -> bool {
+        matches!(self, Stage::Done | Stage::Failed | Stage::Cancelled)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

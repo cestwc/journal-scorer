@@ -1,6 +1,7 @@
 mod cli;
 mod commands;
 mod config;
+mod models;
 mod pdf;
 mod web;
 

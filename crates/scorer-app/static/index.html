@@ -9,25 +9,31 @@
 <body>
   <header class="topbar">
     <div class="brand">Journal Scorer</div>
-    <div id="status" class="status">connecting…</div>
+    <div class="topbar-right">
+      <label class="model-pick" title="Model used for the next scoring run">
+        <span class="muted small">Model</span>
+        <select id="model" disabled><option>loading…</option></select>
+      </label>
+      <div id="status" class="status" title="Server status">connecting…</div>
+    </div>
   </header>
 
   <main class="layout">
     <section class="pane doc-pane">
       <div class="pane-head">
         <div class="tabs" role="tablist">
-          <button class="tab active" data-tab="edit">Text</button>
-          <button class="tab" data-tab="annotated" id="annotated-tab" disabled>Annotated</button>
-          <button class="tab" data-tab="pdf" id="pdf-tab" hidden>PDF</button>
+          <button class="tab active" role="tab" data-tab="edit">Text</button>
+          <button class="tab" role="tab" data-tab="annotated" id="annotated-tab" disabled>Annotated</button>
+          <button class="tab" role="tab" data-tab="pdf" id="pdf-tab" hidden>PDF</button>
         </div>
         <div class="actions">
-          <label class="btn ghost">Open .pdf / .txt<input type="file" id="file" accept=".pdf,.txt,.md,application/pdf,text/plain" hidden></label>
-          <button id="score" class="btn primary">Score</button>
+          <label class="btn" id="open-btn">Open file…<input type="file" id="file" accept=".pdf,.txt,.md,application/pdf,text/plain" hidden></label>
+          <button id="score" class="btn primary" title="Score the text (Ctrl+Enter)">Score text</button>
         </div>
       </div>
 
       <div id="edit-view" class="view">
-        <textarea id="input" spellcheck="false" placeholder="Paste a journal reflection here, or open / drop a PDF…"></textarea>
+        <textarea id="input" spellcheck="false" placeholder="Paste a journal reflection here, or drop a PDF anywhere on the page."></textarea>
         <div id="input-hint" class="hint"></div>
       </div>
 
@@ -42,27 +48,44 @@
     </section>
 
     <aside class="pane side-pane">
-      <div id="empty" class="empty">Open or drop a <b>PDF</b>, or paste text and press <b>Score</b>.<br>
-        The model labels each sentence against the rubric; the scores are then computed from those labels.</div>
-      <div id="busy" class="busy" hidden>
-        <div class="spinner"></div>
-        <div><span id="busy-stage">Scoring…</span> <span class="muted"><span id="elapsed">0</span>s</span></div>
-        <div class="muted small">Every sentence (and every screenshot) is sent to the model. A long journal can take 10–20 minutes; you can leave this page open.</div>
+      <div id="empty" class="empty">
+        <div class="empty-title">Score a journal</div>
+        <ol class="steps">
+          <li>Choose a model at the top right.</li>
+          <li>Open or drop a <b>PDF</b>, or paste text and press <b>Score text</b>.</li>
+          <li>Review the highlighted evidence and the score per criterion.</li>
+        </ol>
+        <p class="muted small">The model only labels evidence; every score is computed from those labels.</p>
       </div>
+
+      <div id="busy" class="busy" hidden>
+        <div class="busy-head">
+          <div class="busy-title" id="busy-title" title="">Scoring…</div>
+          <button id="cancel" class="btn danger small-btn">Cancel</button>
+        </div>
+        <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="busy-row">
+          <span id="busy-stage">Starting…</span>
+          <span class="muted" id="elapsed">0:00</span>
+        </div>
+        <div class="muted small" id="busy-model"></div>
+        <p class="muted small">A long journal can take 10–20 minutes. You can close this page; the job keeps running and reopens here.</p>
+      </div>
+
+      <div id="notice" class="notice" hidden></div>
       <div id="error" class="error" hidden></div>
 
       <div id="results" hidden>
         <div class="total">
           <div>
-            <div class="muted small">Total</div>
+            <div class="muted small">Total score</div>
             <div class="total-num"><span id="total"></span><span class="muted"> / <span id="max-total"></span></span></div>
           </div>
-          <div class="downloads">
-            <a id="download-pdf" class="btn primary" hidden>Annotated PDF</a>
-            <button id="download" class="btn ghost">JSON</button>
-          </div>
+          <button id="download" class="btn" title="Download the full report as JSON">Report (JSON)</button>
         </div>
-        <div id="meta" class="muted small"></div>
+        <dl id="meta" class="meta"></dl>
         <div id="detail" class="detail" hidden></div>
         <div id="criteria" class="criteria"></div>
         <div id="warnings" class="warnings" hidden></div>
@@ -79,6 +102,8 @@
       </table>
     </div>
   </section>
+
+  <div id="drop-overlay" class="drop-overlay" hidden><div>Drop a PDF to score it</div></div>
 
   <script src="/app.js"></script>
 </body>

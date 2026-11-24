@@ -7,8 +7,10 @@ use scorer_engine::ScoreReport;
 use scorer_llm::ProviderInfo;
 use serde::{Deserialize, Serialize};
 
+use crate::models::{ModelError, ModelList};
+
 use super::error::ApiError;
-use super::jobs::JobView;
+use super::jobs::{CancelError, JobView};
 use super::AppState;
 
 #[derive(Serialize)]
@@ -19,15 +21,24 @@ pub struct Health {
 }
 
 pub async fn health(State(state): State<AppState>) -> Json<Health> {
-    Json(Health {
-        status: "ok",
-        provider: state.scorer.provider_info(),
-        rubric_id: state.scorer.rubric().id.clone(),
-    })
+    let scorer = state.models.default_scorer();
+    Json(Health { status: "ok", provider: scorer.provider_info(), rubric_id: scorer.rubric().id.clone() })
 }
 
 pub async fn rubric(State(state): State<AppState>) -> Json<Rubric> {
-    Json(state.scorer.rubric().clone())
+    Json(state.models.default_scorer().rubric().clone())
+}
+
+pub async fn models(State(state): State<AppState>) -> Json<ModelList> {
+    let models = state.models.clone();
+    // Reads OpenCode's files (the catalog is a few MB).
+    Json(tokio::task::spawn_blocking(move || models.list()).await.expect("listing models does not panic"))
+}
+
+impl From<ModelError> for ApiError {
+    fn from(e: ModelError) -> Self {
+        ApiError::new(StatusCode::BAD_REQUEST, e.to_string())
+    }
 }
 
 #[derive(Deserialize)]
@@ -35,13 +46,17 @@ pub struct ScoreRequest {
     text: String,
     #[serde(default)]
     include_spans: bool,
+    /// `provider/model`; the server's default when absent.
+    #[serde(default)]
+    model: Option<String>,
 }
 
 pub async fn score(
     State(state): State<AppState>,
     Json(req): Json<ScoreRequest>,
 ) -> Result<Json<ScoreReport>, ApiError> {
-    let mut report = state.scorer.score_text(&req.text).await?;
+    let scorer = state.models.get(req.model.as_deref())?;
+    let mut report = scorer.score_text(&req.text).await?;
     if !req.include_spans {
         report.spans.clear();
     }
@@ -54,26 +69,47 @@ pub struct JobCreated {
     id: String,
 }
 
-/// Accepts a PDF upload (multipart field `file`) and starts scoring it.
+/// Accepts a PDF upload (multipart field `file`, optional field `model`)
+/// and starts scoring it.
 pub async fn create_job(State(state): State<AppState>, mut form: Multipart) -> Result<(StatusCode, Json<JobCreated>), ApiError> {
     let bad = |m: String| ApiError::new(StatusCode::BAD_REQUEST, m);
+    let mut upload = None;
+    let mut model = None;
     while let Some(field) = form.next_field().await.map_err(|e| bad(e.to_string()))? {
-        if field.name() != Some("file") {
-            continue;
+        match field.name() {
+            Some("file") => {
+                let file_name = field.file_name().unwrap_or("upload.pdf").to_owned();
+                let bytes = field.bytes().await.map_err(|e| bad(e.to_string()))?;
+                if !bytes.starts_with(b"%PDF") {
+                    return Err(bad(format!("`{file_name}` is not a PDF")));
+                }
+                upload = Some((file_name, bytes.to_vec()));
+            }
+            Some("model") => model = Some(field.text().await.map_err(|e| bad(e.to_string()))?),
+            _ => {}
         }
-        let file_name = field.file_name().unwrap_or("upload.pdf").to_owned();
-        let bytes = field.bytes().await.map_err(|e| bad(e.to_string()))?;
-        if !bytes.starts_with(b"%PDF") {
-            return Err(bad(format!("`{file_name}` is not a PDF")));
-        }
-        let id = state.jobs.submit(state.scorer.clone(), bytes.to_vec(), file_name);
-        return Ok((StatusCode::ACCEPTED, Json(JobCreated { id })));
     }
-    Err(bad("missing multipart field `file`".into()))
+    let (file_name, bytes) = upload.ok_or_else(|| bad("missing multipart field `file`".into()))?;
+    let scorer = state.models.get(model.as_deref())?;
+    let id = state.jobs.submit(scorer, bytes, file_name);
+    Ok((StatusCode::ACCEPTED, Json(JobCreated { id })))
 }
 
 pub async fn job(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<JobView>, ApiError> {
     state.jobs.view(&id).map(Json).ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "unknown job"))
+}
+
+pub async fn cancel_job(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<JobView>, ApiError> {
+    state.jobs.cancel(&id).map(Json).map_err(|e| match e {
+        CancelError::NotFound => ApiError::new(StatusCode::NOT_FOUND, "unknown job"),
+        CancelError::Finished(stage) => {
+            ApiError::new(StatusCode::CONFLICT, format!("job already finished ({})", stage_name(stage)))
+        }
+    })
+}
+
+fn stage_name(stage: scorer_engine::Stage) -> String {
+    serde_json::to_value(stage).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default()
 }
 
 #[derive(Deserialize)]

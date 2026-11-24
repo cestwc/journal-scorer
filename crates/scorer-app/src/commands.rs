@@ -12,6 +12,7 @@ use serde::Serialize;
 
 use crate::cli::{Cli, Command};
 use crate::config::{self, AppConfig};
+use crate::models::ModelRegistry;
 use crate::{pdf, web};
 
 pub async fn run(cli: Cli) -> Result<()> {
@@ -98,28 +99,14 @@ pub async fn run(cli: Cli) -> Result<()> {
         }
         Command::Serve { addr } => {
             let cfg = config::load(&cli.global)?;
-            let scorer = Arc::new(build_scorer(&cfg)?);
-            web::serve(scorer, addr.as_deref().unwrap_or(&cfg.server.addr)).await
+            let models = Arc::new(ModelRegistry::from_config(&cfg)?);
+            web::serve(models, addr.as_deref().unwrap_or(&cfg.server.addr)).await
         }
     }
 }
 
-pub fn build_scorer(cfg: &AppConfig) -> Result<Scorer> {
-    let rubric = config::load_rubric(cfg.rubric.path.as_deref())?;
-    let provider = scorer_llm::build_provider(&cfg.llm).context("building LLM provider")?;
-    let info = provider.info();
-    let mut options = cfg.scorer.clone();
-    // Stay within the model's real limits.
-    if let Some(max) = info.max_output {
-        options.max_tokens = Some(options.max_tokens.map_or(max, |m| m.min(max)));
-        options.figure_max_tokens = options.figure_max_tokens.min(max);
-    }
-    if info.vision == Some(false) && options.describe_figures {
-        tracing::warn!(model = %info.model, "model does not accept images; screenshots will be skipped");
-        options.describe_figures = false;
-    }
-    tracing::info!(provider = %info.kind, model = %info.model, rubric = %rubric.id, "scorer ready");
-    Ok(Scorer::new(provider, Arc::new(rubric)).with_options(options))
+pub fn build_scorer(cfg: &AppConfig) -> Result<Arc<Scorer>> {
+    Ok(ModelRegistry::from_config(cfg)?.default_scorer())
 }
 
 fn is_pdf(path: &Path) -> bool {
