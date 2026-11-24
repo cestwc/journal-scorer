@@ -112,6 +112,7 @@ impl ModelRegistry {
             models.push(ModelEntry {
                 spec: self.default_spec.clone(),
                 name: info.model.clone(),
+                provider: info.kind.clone(),
                 vision: info.vision,
                 context: None,
                 cost: None,

@@ -22,19 +22,30 @@
     <section class="pane doc-pane">
       <div class="pane-head">
         <div class="tabs" role="tablist">
-          <button class="tab active" role="tab" data-tab="edit">Text</button>
+          <button class="tab active" role="tab" data-tab="edit">Input</button>
           <button class="tab" role="tab" data-tab="annotated" id="annotated-tab" disabled>Annotated</button>
           <button class="tab" role="tab" data-tab="pdf" id="pdf-tab" hidden>PDF</button>
         </div>
         <div class="actions">
           <label class="btn" id="open-btn">Open file…<input type="file" id="file" accept=".pdf,.txt,.md,application/pdf,text/plain" hidden></label>
-          <button id="score" class="btn primary" title="Score the text (Ctrl+Enter)">Score text</button>
+          <button id="score" class="btn primary" title="Score the input (Ctrl+Enter)">Score</button>
         </div>
       </div>
 
       <div id="edit-view" class="view">
-        <textarea id="input" spellcheck="false" placeholder="Paste a journal reflection here, or drop a PDF anywhere on the page."></textarea>
-        <div id="input-hint" class="hint"></div>
+        <div id="file-card" class="file-card" hidden>
+          <div class="file-icon" aria-hidden="true">PDF</div>
+          <div class="file-info">
+            <div class="file-name" id="file-name"></div>
+            <div class="muted small" id="file-size"></div>
+          </div>
+          <button id="file-remove" class="btn small-btn" title="Remove the PDF and paste text instead">Remove</button>
+        </div>
+        <iframe id="source-frame" title="Selected PDF" hidden></iframe>
+        <div id="text-input">
+          <textarea id="input" spellcheck="false" placeholder="Paste a journal reflection here, or open / drop a PDF."></textarea>
+          <div id="input-hint" class="hint"></div>
+        </div>
       </div>
 
       <div id="pdf-view" class="view" hidden>
@@ -52,7 +63,8 @@
         <div class="empty-title">Score a journal</div>
         <ol class="steps">
           <li>Choose a model at the top right.</li>
-          <li>Open or drop a <b>PDF</b>, or paste text and press <b>Score text</b>.</li>
+          <li>Open or drop a <b>PDF</b>, or paste text.</li>
+          <li>Press <b>Score</b>.</li>
           <li>Review the highlighted evidence and the score per criterion.</li>
         </ol>
         <p class="muted small">The model only labels evidence; every score is computed from those labels.</p>
@@ -103,7 +115,7 @@
     </div>
   </section>
 
-  <div id="drop-overlay" class="drop-overlay" hidden><div>Drop a PDF to score it</div></div>
+  <div id="drop-overlay" class="drop-overlay" hidden><div>Drop a PDF or text file</div></div>
 
   <script src="/app.js"></script>
 </body>

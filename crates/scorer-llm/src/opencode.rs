@@ -11,6 +11,10 @@ use serde_json::{Map, Value};
 
 use crate::LlmError;
 
+/// OpenCode's own provider (OpenCode Zen). Its free models need no key in
+/// OpenCode, but Zen serves keyless requests only to OpenCode itself.
+const ZEN: &str = "opencode";
+
 /// AI SDK packages whose providers speak OpenAI `/chat/completions`.
 const OPENAI_STYLE: &[&str] = &["@ai-sdk/openai-compatible", "@openrouter/ai-sdk-provider", "@ai-sdk/openai"];
 
@@ -64,6 +68,8 @@ pub struct ResolvedModel {
 pub struct ModelEntry {
     pub spec: String,
     pub name: String,
+    /// Provider display name, e.g. `OpenRouter`.
+    pub provider: String,
     pub vision: Option<bool>,
     pub context: Option<u64>,
     /// USD per million input / output tokens.
@@ -129,6 +135,9 @@ impl OpencodeSetup {
         let user_model = user.and_then(|p| p.get("models")).and_then(|m| m.get(mid));
         let cat_model = cat.and_then(|p| p.get("models")).and_then(|m| m.get(mid));
         let model = user_model.or(cat_model).ok_or_else(|| cfg_err(format!("provider `{pid}` has no model `{mid}`")))?;
+        if let Some(why) = hidden_reason(model, mid, user) {
+            return Err(cfg_err(format!("`{spec}` is hidden in OpenCode: {why}")));
+        }
 
         // Protocol: per-model override, then the provider's package.
         let npm = cat_model
@@ -163,6 +172,12 @@ impl OpencodeSetup {
             }),
         };
 
+        if pid == ZEN && api_key.is_none() {
+            return Err(cfg_err(format!(
+                "`{spec}` needs an OpenCode Zen or Go key: without one, Zen's free models only work inside OpenCode"
+            )));
+        }
+
         Ok(ResolvedModel {
             spec: spec.to_owned(),
             name: model.get("name").and_then(Value::as_str).unwrap_or(mid).to_owned(),
@@ -194,6 +209,12 @@ impl OpencodeSetup {
 
         let mut out = Vec::new();
         for pid in pids {
+            let provider = [self.config.get("provider").and_then(|p| p.get(pid)), self.catalog.get(pid)]
+                .into_iter()
+                .flatten()
+                .find_map(|p| p.get("name").and_then(Value::as_str))
+                .unwrap_or(pid)
+                .to_owned();
             let mut mids: Vec<String> = [self.config.get("provider").and_then(|p| p.get(pid)), self.catalog.get(pid)]
                 .into_iter()
                 .flatten()
@@ -211,6 +232,7 @@ impl OpencodeSetup {
                     .or_else(|| self.catalog.get(pid).and_then(|p| p.get("models")).and_then(|m| m.get(&mid)));
                 let unusable = self.resolve(&spec).err().map(|e| e.to_string());
                 out.push(ModelEntry {
+                    provider: provider.clone(),
                     name: model.and_then(|m| m.get("name")).and_then(Value::as_str).unwrap_or(&mid).to_owned(),
                     vision: model.and_then(vision),
                     context: model.and_then(|m| m.pointer("/limit/context")).and_then(Value::as_u64),
@@ -259,6 +281,31 @@ impl OpencodeSetup {
         out.push_str(rest);
         Ok(out)
     }
+}
+
+/// OpenCode's own picker filters: deprecated models, alpha models unless
+/// experimental models are enabled, and the provider's black/whitelist.
+fn hidden_reason(model: &Value, mid: &str, user_provider: Option<&Value>) -> Option<&'static str> {
+    let listed = |key: &str| {
+        user_provider
+            .and_then(|p| p.get(key))
+            .and_then(Value::as_array)
+            .map(|a| a.iter().any(|v| v.as_str() == Some(mid)))
+    };
+    match model.get("status").and_then(Value::as_str) {
+        Some("deprecated") => return Some("deprecated"),
+        Some("alpha") if std::env::var_os("OPENCODE_ENABLE_EXPERIMENTAL_MODELS").is_none() => {
+            return Some("alpha model (set OPENCODE_ENABLE_EXPERIMENTAL_MODELS to use it)")
+        }
+        _ => {}
+    }
+    if listed("blacklist") == Some(true) {
+        return Some("on the provider's blacklist");
+    }
+    if listed("whitelist") == Some(false) {
+        return Some("not on the provider's whitelist");
+    }
+    None
 }
 
 fn vision(model: &Value) -> Option<bool> {
@@ -332,7 +379,10 @@ mod tests {
               "router": {"api": "https://router.example/v1", "npm": "@openrouter/ai-sdk-provider", "env": [],
                 "models": {"vendor/big": {"name": "Big", "modalities": {"input": ["text"]}, "limit": {"context": 1000, "output": 8000}, "cost": {"input": 1, "output": 2}},
                            "vendor/other": {"name": "Other", "provider": {"npm": "@ai-sdk/anthropic"}}}},
-              "sub": {"api": "https://sub.example/v1", "npm": "@ai-sdk/openai-compatible", "models": {"m": {"name": "M"}}}
+              "sub": {"api": "https://sub.example/v1", "npm": "@ai-sdk/openai-compatible", "models": {"m": {"name": "M"}}},
+              "opencode": {"name": "OpenCode Zen", "api": "https://zen.example/v1", "npm": "@ai-sdk/openai-compatible", "env": ["OC_TEST_UNSET_KEY"],
+                "models": {"free": {"name": "Free One", "cost": {"input": 0, "output": 0}}, "paid": {"name": "Paid", "cost": {"input": 1, "output": 2}},
+                           "old": {"name": "Old", "status": "deprecated", "cost": {"input": 0, "output": 0}}}}
             }"#,
         )
         .unwrap();
@@ -365,7 +415,14 @@ mod tests {
         assert!(s.resolve("sub/m").unwrap_err().to_string().contains("oauth"));
         assert!(s.resolve("nope").is_err());
 
-        let listed: Vec<String> = s.list().into_iter().map(|m| m.spec).collect();
+        // OpenCode Zen without a key is refused; hidden models are refused.
+        assert!(s.resolve("opencode/free").unwrap_err().to_string().contains("Zen or Go key"));
+        assert!(s.resolve("opencode/old").unwrap_err().to_string().contains("deprecated"));
+
+        let entries = s.list();
+        assert!(entries.iter().all(|m| !m.spec.starts_with("opencode/")), "keyless Zen is not listed");
+        assert_eq!(entries.iter().find(|m| m.spec == "router/vendor/big").unwrap().provider, "router");
+        let listed: Vec<String> = entries.into_iter().map(|m| m.spec).collect();
         assert!(listed.contains(&"router/vendor/big".to_owned()) && listed.contains(&"local/qwen".to_owned()));
         std::fs::remove_dir_all(dir).ok();
     }

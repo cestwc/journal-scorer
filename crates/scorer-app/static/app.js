@@ -17,6 +17,8 @@ const state = {
   open: new Set(),       // criterion ids whose subitem list is expanded
   job: null,             // {id, name} of the PDF job behind the current report
   models: null,          // GET /api/models
+  file: null,            // selected PDF (File), kept until removed, also after a failed run
+  fileUrl: null,         // object URL previewing `file`
   run: null,             // the scoring run in progress: {kind: 'text', abort} or {kind: 'pdf', id, name}
   timer: null,
 };
@@ -128,6 +130,7 @@ function loadRubric(r) {
 function wire() {
   document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
   $('score').addEventListener('click', runScore);
+  $('file-remove').addEventListener('click', () => { clearFile(); clearMessages(); });
   $('cancel').addEventListener('click', cancelRun);
   $('input').addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runScore();
@@ -161,8 +164,11 @@ function wire() {
 
 // ---------------------------------------------------------------- models
 
+const isFree = (m) => !!m.cost && m.cost[0] === 0 && m.cost[1] === 0;
+
 function modelLabel(m) {
-  return m.vision === false ? `${m.name} · text only` : m.name;
+  const free = isFree(m) && !/\bfree\b/i.test(m.name); // many names already say "free"
+  return [m.name, free && 'Free', m.vision === false && 'text only'].filter(Boolean).join(' · ');
 }
 
 function modelTitle(m) {
@@ -191,11 +197,11 @@ function renderModelOptions(current) {
   if (recent.length) groups.push(el('optgroup', { label: 'Recently used' }, recent.map((s) => option(known.get(s)))));
   const byProvider = new Map();
   for (const m of list.models) {
-    const p = m.spec.split('/')[0];
+    const p = m.provider || m.spec.split('/')[0];
     if (!byProvider.has(p)) byProvider.set(p, []);
     byProvider.get(p).push(m);
   }
-  for (const [p, ms] of byProvider) groups.push(el('optgroup', { label: `${p} (${ms.length})` }, ms.map(option)));
+  for (const [p, ms] of byProvider) groups.push(el('optgroup', { label: p }, ms.map(option)));
   $('model').replaceChildren(...groups);
   $('model').value = current;
   $('model').title = modelTitle(known.get(current) || { spec: current });
@@ -261,6 +267,7 @@ function syncControls() {
   const busy = !!state.run;
   $('score').disabled = busy;
   $('file').disabled = busy;
+  $('file-remove').disabled = busy;
   $('open-btn').classList.toggle('disabled', busy);
   $('model').disabled = busy || !(state.models && state.models.switchable);
 }
@@ -315,24 +322,52 @@ function showJobProgress(p) {
   setProgress(p.stage === 'queued' ? null : st.from + (st.to - st.from) * share, `${st.text}${count}`);
 }
 
+/** Selects the input; scoring starts only when Score is pressed. */
 async function openFile(f) {
   if (state.run) return;
   clearMessages();
   if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
-    runPdf(f);
-    return;
+    selectPdf(f);
+  } else {
+    clearFile();
+    $('input').value = await f.text();
+    updateHint();
   }
-  $('input').value = await f.text();
-  updateHint();
   showTab('edit');
+}
+
+function selectPdf(f) {
+  clearFile();
+  state.file = f;
+  state.fileUrl = URL.createObjectURL(f);
+  $('file-name').textContent = f.name;
+  $('file-name').title = f.name;
+  $('file-size').textContent = f.size < 1048576 ? `${Math.max(1, Math.round(f.size / 1024))} KB` : `${(f.size / 1048576).toFixed(1)} MB`;
+  $('source-frame').src = state.fileUrl;
+  $('file-card').hidden = false;
+  $('source-frame').hidden = false;
+  $('text-input').hidden = true;
+}
+
+function clearFile() {
+  if (state.fileUrl) URL.revokeObjectURL(state.fileUrl);
+  state.file = null;
+  state.fileUrl = null;
+  $('source-frame').removeAttribute('src');
+  $('file-card').hidden = true;
+  $('source-frame').hidden = true;
+  $('text-input').hidden = false;
 }
 
 // ---------------------------------------------------------------- scoring
 
+/** Scores the selected PDF, or else the pasted text. */
 async function runScore() {
   if (state.run) return;
+  clearMessages();
+  if (state.file) { runPdf(state.file); return; }
   const text = $('input').value;
-  if (!text.trim()) { showError('Paste some text first.'); return; }
+  if (!text.trim()) { showError('Open a PDF or paste some text first.'); return; }
   const abort = new AbortController();
   const model = chosenModel();
   beginRun({ kind: 'text', abort }, 'Scoring text', model || state.models?.default);
@@ -369,7 +404,7 @@ async function runPdf(file) {
     if (run.cancelled) await cancelJob(id); // Cancel pressed during upload.
     await followJob(run);
   } catch (e) {
-    showError(`Scoring ${file.name} failed: ${e.message}`);
+    showError(`Scoring failed: ${e.message}\n\nThe PDF is still selected; press Score to try again.`);
   } finally {
     if (state.run === run) endRun();
   }
@@ -405,7 +440,7 @@ async function followJob(run) {
     $('busy-model').textContent = `Model: ${job.model}`;
     const p = job.progress;
     if (p.stage === 'failed') throw new Error(job.error || 'job failed');
-    if (p.stage === 'cancelled') { showNotice(`Cancelled ${run.name}.`); return; }
+    if (p.stage === 'cancelled') { showNotice(state.file ? "Cancelled. The PDF is still selected." : `Cancelled ${run.name}.`); return; }
     if (p.stage === 'done' && job.report) {
       showReport(job.report, job.report.source_text || '', { id: run.id, name: run.name });
       return;

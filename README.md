@@ -90,6 +90,12 @@ provider addresses come from `opencode.json(c)` (with `{env:…}`/`{file:…}`),
 itself is not run. Supported: providers speaking the OpenAI chat API (`@ai-sdk/openai-compatible`,
 OpenRouter, OpenAI). Not yet: Anthropic/Google-protocol models and browser-login (OAuth) providers.
 
+- Models are filtered like OpenCode's own picker: deprecated models, `alpha` models (unless
+  `OPENCODE_ENABLE_EXPERIMENTAL_MODELS` is set) and models outside a provider's
+  `whitelist`/`blacklist` are hidden.
+- OpenCode Zen (provider `opencode`) needs a Zen or Go key: Zen's keyless free models are served
+  only to OpenCode itself.
+
 - Choosing a model: the web page has a Model menu (default, recently used, then every usable model
   by provider; text-only models are marked). The API takes `"model": "provider/model"` in
   `/api/score` and a `model` field in the `/api/jobs` upload; `GET /api/models` lists them. Each
